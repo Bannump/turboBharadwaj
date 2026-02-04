@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@bturbovets/data": ["libs/data/src/index.ts"],
+      "@bturbovets/data/*": ["libs/data/src/*"],
+      "@bturbovets/auth": ["libs/auth/src/index.ts"],
+      "@bturbovets/auth/*": ["libs/auth/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "tmp", "dist"]
+}

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules
+
+# Build
+dist
+tmp
+out-tsc
+.angular
+
+# NX
+.nx/cache
+.nx/workspace-data
+
+# IDE
+.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Env
+.env
+.env.local
+*.db
+
+# Logs
+*.log
+coverage
+.nyc_output
+
+# OS
+.DS_Store
+Thumbs.db
+
+#pdfs
+.pdf

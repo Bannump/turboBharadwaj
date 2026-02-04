@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "outDir": "../../dist/out-tsc/apps/api",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.spec.ts", "jest.config.ts"]
+}

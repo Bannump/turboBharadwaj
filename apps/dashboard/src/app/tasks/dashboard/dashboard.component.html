@@ -1,0 +1,191 @@
+<div class="min-h-screen bg-surface-light dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+  <!-- Header -->
+  <header class="sticky top-0 z-10 border-b border-slate-200/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-sm">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white font-display font-semibold shadow-md shadow-primary-500/20">
+          T
+        </div>
+        <h1 class="text-xl font-display font-semibold text-slate-800 dark:text-slate-100">Tasks</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/80 px-3 py-1.5 rounded-lg font-medium">{{ user()?.email }} · {{ user()?.role }}</span>
+        <button
+          type="button"
+          (click)="toggleDark()"
+          class="rounded-xl p-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition"
+          title="Toggle dark mode"
+        >
+          {{ darkMode() ? '☀️' : '🌙' }}
+        </button>
+        <button
+          type="button"
+          (click)="logout()"
+          class="rounded-xl px-4 py-2 text-sm font-medium bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 transition"
+        >
+          Logout
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+    <!-- Toolbar -->
+    <div class="flex flex-wrap items-center gap-3 mb-6">
+      <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 p-2 shadow-card">
+        <select
+          [ngModel]="filterCategory()"
+          (ngModelChange)="filterCategory.set($event)"
+          class="focus-ring rounded-xl border-0 bg-slate-100 dark:bg-slate-700/80 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200"
+        >
+          <option value="">All categories</option>
+          @for (c of ['General', 'Work', 'Personal']; track c) {
+            <option [value]="c">{{ c }}</option>
+          }
+        </select>
+        <select
+          [ngModel]="filterStatus()"
+          (ngModelChange)="filterStatus.set($event)"
+          class="focus-ring rounded-xl border-0 bg-slate-100 dark:bg-slate-700/80 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200"
+        >
+          <option value="">All statuses</option>
+          <option value="todo">To do</option>
+          <option value="in_progress">In progress</option>
+          <option value="done">Done</option>
+        </select>
+        <select
+          [ngModel]="sortBy()"
+          (ngModelChange)="sortBy.set($event)"
+          class="focus-ring rounded-xl border-0 bg-slate-100 dark:bg-slate-700/80 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200"
+        >
+          <option value="order">Order</option>
+          <option value="title">Title</option>
+          <option value="status">Status</option>
+        </select>
+      </div>
+      <button
+        type="button"
+        (click)="openCreate()"
+        class="rounded-xl px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/30 transition"
+      >
+        + New task
+      </button>
+    </div>
+
+    @if (error()) {
+      <div class="rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 px-4 py-3 mb-4">
+        <p class="text-red-600 dark:text-red-400 text-sm">{{ error() }}</p>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="flex items-center justify-center py-16">
+        <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+          <span class="inline-block w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></span>
+          <span>Loading...</span>
+        </div>
+      </div>
+    } @else {
+      <ul
+        cdkDropList
+        (cdkDropListDropped)="drop($event)"
+        class="space-y-3"
+      >
+        @for (task of filteredTasks(); track task.id) {
+          <li
+            cdkDrag
+            class="group rounded-2xl border border-slate-200 dark:border-slate-600/80 bg-white dark:bg-slate-800/80 shadow-card hover:shadow-card-hover p-4 cursor-grab active:cursor-grabbing flex flex-wrap items-start justify-between gap-3 transition"
+          >
+            <div class="flex-1 min-w-0">
+              <span class="font-medium text-slate-800 dark:text-slate-100">{{ task.title }}</span>
+              @if (task.description) {
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{{ task.description }}</p>
+              }
+              <div class="flex flex-wrap gap-2 mt-3">
+                <span class="text-xs font-medium px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{ task.category }}</span>
+                <span class="text-xs font-medium px-2.5 py-1 rounded-lg {{ task.status === 'done' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : task.status === 'in_progress' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300' }}">
+                  {{ statusLabel(task.status) }}
+                </span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="cdk-drag-handle text-slate-400 dark:text-slate-500 cursor-grab px-1.5 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">⋮⋮</span>
+              <button type="button" (click)="openEdit(task)" class="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition" title="Edit">✏️</button>
+              <button type="button" (click)="deleteTask(task)" class="rounded-lg p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition" title="Delete">🗑️</button>
+            </div>
+          </li>
+        }
+      </ul>
+      @if (filteredTasks().length === 0) {
+        <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/30 py-12 text-center">
+          <p class="text-slate-500 dark:text-slate-400">No tasks. Create one above.</p>
+        </div>
+      }
+    }
+  </main>
+
+  <!-- Create/Edit modal -->
+  @if (showForm()) {
+    <div class="fixed inset-0 z-20 flex items-center justify-center p-4 bg-slate-900/50 dark:bg-slate-950/70 backdrop-blur-sm animate-fade-in" (click)="closeForm()">
+      <div
+        class="rounded-3xl bg-white dark:bg-slate-800 shadow-modal w-full max-w-md p-6 sm:p-8 animate-slide-up border border-slate-200/80 dark:border-slate-700"
+        (click)="$event.stopPropagation()"
+      >
+        <h2 class="text-lg font-display font-semibold text-slate-800 dark:text-slate-100 mb-5">{{ editingId() ? 'Edit task' : 'New task' }}</h2>
+        <form (ngSubmit)="saveTask()" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Title</label>
+            <input
+              type="text"
+              [ngModel]="formTitle()"
+              (ngModelChange)="formTitle.set($event)"
+              name="title"
+              class="focus-ring w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700/50 px-4 py-2.5"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Description</label>
+            <textarea
+              [ngModel]="formDescription()"
+              (ngModelChange)="formDescription.set($event)"
+              name="description"
+              rows="2"
+              class="focus-ring w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700/50 px-4 py-2.5 resize-none"
+            ></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Category</label>
+            <select
+              [ngModel]="formCategory()"
+              (ngModelChange)="formCategory.set($event)"
+              name="category"
+              class="focus-ring w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700/50 px-4 py-2.5"
+            >
+              @for (c of ['General', 'Work', 'Personal']; track c) {
+                <option [value]="c">{{ c }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Status</label>
+            <select
+              [ngModel]="formStatus()"
+              (ngModelChange)="formStatus.set($event)"
+              name="status"
+              class="focus-ring w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700/50 px-4 py-2.5"
+            >
+              <option value="todo">To do</option>
+              <option value="in_progress">In progress</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+          <div class="flex gap-3 justify-end pt-3">
+            <button type="button" (click)="closeForm()" class="rounded-xl px-4 py-2.5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 transition">Cancel</button>
+            <button type="submit" class="rounded-xl px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-medium transition">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>

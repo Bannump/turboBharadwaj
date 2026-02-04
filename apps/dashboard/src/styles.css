@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900;
+  }
+}
+
+/* Drag-drop polish */
+.cdk-drag-preview {
+  opacity: 0.95;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  border-radius: 1rem;
+  transform: rotate(2deg);
+}
+.cdk-drag-placeholder {
+  opacity: 0.25;
+  border: 2px dashed rgb(148 163 184);
+}
+.dark .cdk-drag-placeholder {
+  border-color: rgb(71 85 105);
+}
