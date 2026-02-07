@@ -19,35 +19,40 @@ A full-stack Task Management System with **role-based access control (RBAC)** in
 npm install
 ```
 
-### Environment variables
+### .env Setup
 
-Copy `.env.example` to `.env` in the project root (or set in the shell when running the API):
+Copy `.env.example` to `.env` in the project root:
 
 ```bash
 cp .env.example .env
 ```
 
-Configure:
+Configure the following variables:
 
-| Variable        | Description                    | Default                    |
-|----------------|--------------------------------|----------------------------|
-| `PORT`         | API server port                | `3333`                     |
-| `DB_PATH`      | SQLite database file path     | `data/tasks.db`            |
-| `JWT_SECRET`   | Secret for signing JWTs        | (required in production)   |
-| `JWT_EXPIRES_IN` | JWT expiry (e.g. `7d`)      | `7d`                       |
-| `AUDIT_LOG_DIR`  | Directory for audit log files | `logs`                     |
+| Variable      | Description                         | Example / Notes                                      |
+|---------------|-------------------------------------|------------------------------------------------------|
+| `PORT`        | API server port                     | `3333` (dashboard proxy expects this by default)     |
+| `DB_PATH`     | SQLite database file path           | `data/tasks.db` — created automatically on first run |
+| `JWT_SECRET`  | Secret for signing JWTs             | **Required**. Use a long random string in production |
+| `JWT_EXPIRES_IN` | JWT expiry (e.g. `7d`, `24h`)   | `7d`                                                 |
+| `AUDIT_LOG_DIR` | Directory for audit log files    | `logs`                                               |
 
-### Run backend (NestJS API)
+**Important:**
+
+- **JWT_SECRET**: Must be set. Use a strong, random value in production (e.g. `openssl rand -base64 32`).
+- **DB config**: `DB_PATH` points to the SQLite file; the `data/` directory is created automatically if it doesn't exist.
+
+### How to run both backend and frontend
+
+**Terminal 1 – Backend (NestJS API):**
 
 ```bash
 npm run start:api
 ```
 
-API runs at **http://localhost:3333**. On first run, the DB is created and seed data is inserted (see **Seed users** below).
+API runs at **http://localhost:3333**. On first run, the DB is created and seed data is inserted.
 
-### Run frontend (Angular dashboard)
-
-In a second terminal:
+**Terminal 2 – Frontend (Angular dashboard):**
 
 ```bash
 npm run start:dashboard
@@ -83,160 +88,244 @@ libs/
   auth/         → Reusable RBAC: permission checks, RequirePermission decorator
 ```
 
-- **apps/api**: REST API, JWT auth, task CRUD, audit log. Depends on `libs/data` and `libs/auth` for types and permission metadata.
-- **apps/dashboard**: SPA with login, task list, create/edit/delete, filters, sort, drag-and-drop. Uses `libs/data` types via direct HTTP types in the app.
-- **libs/data**: Single source of truth for roles, permissions, and DTOs used by API and optionally by the dashboard.
-- **libs/auth**: Permission constants and `hasPermission(role, permission)` used by the API’s `PermissionsGuard`; `RequirePermission(...)` decorator is used on controller methods.
-
 ### Rationale
 
-- Shared **data** and **auth** libs keep API and (if needed) other consumers aligned on roles and permissions.
-- NX allows building and testing `api`, `dashboard`, `data`, and `auth` independently and with cached runs.
+- **apps/api**: REST API with JWT auth, task CRUD, and audit logging. Depends on `libs/data` and `libs/auth` for types and permission metadata.
+- **apps/dashboard**: SPA with login, task list, create/edit/delete, filters, sort, and drag-and-drop. Uses shared types via direct HTTP types.
+- **libs/data**: Single source of truth for roles, permissions, DTOs, and domain types used by the API and optionally by the dashboard.
+- **libs/auth**: Permission constants and `hasPermission(role, permission)` used by the API's `PermissionsGuard`; the `@RequirePermission(Permission.X)` decorator is applied on controller methods.
+
+### Shared libraries/modules
+
+| Library | Purpose |
+|---------|---------|
+| **@bturbovets/data** | Role enum, Permission enum, `ROLE_PERMISSIONS` mapping, Task/User/Organization types, DTOs |
+| **@bturbovets/auth** | `hasPermission(role, permission)`, `@RequirePermission(...)` decorator for route-level permission checks |
+
+NX allows building and testing `api`, `dashboard`, `data`, and `auth` independently with cached runs.
 
 ---
 
-## Data Model
+## Data Model Explanation
 
 ### Schema (SQLite via TypeORM)
 
-- **users**  
-  `id` (UUID), `email` (unique), `passwordHash`, `role` (owner | admin | viewer), `organizationId`, `createdAt`, `updatedAt`.
+| Table | Columns | Description |
+|-------|---------|-------------|
+| **users** | `id` (UUID), `email` (unique), `passwordHash`, `role` (owner \| admin \| viewer), `organizationId`, `createdAt`, `updatedAt` | Users belong to an organization and have a role |
+| **organizations** | `id` (UUID), `name`, `parentId` (nullable), `createdAt`, `updatedAt` | Supports 2-level hierarchy via `parentId` |
+| **tasks** | `id` (UUID), `title`, `description` (nullable), `status` (todo \| in_progress \| done), `category`, `orderIndex`, `organizationId`, `createdById`, `createdAt`, `updatedAt` | Tasks belong to an organization and have a creator |
+| **audit_logs** | `id` (UUID), `action`, `resource`, `resourceId` (nullable), `userId`, `userEmail`, `details` (nullable), `timestamp` | Audit trail for actions on resources |
 
-- **organizations**  
-  `id` (UUID), `name`, `parentId` (nullable, 2-level hierarchy), `createdAt`, `updatedAt`.
-
-- **tasks**  
-  `id` (UUID), `title`, `description` (nullable), `status` (todo | in_progress | done), `category`, `orderIndex`, `organizationId`, `createdById`, `createdAt`, `updatedAt`.
-
-- **audit_logs**  
-  `id` (UUID), `action`, `resource`, `resourceId` (nullable), `userId`, `userEmail`, `details` (nullable), `timestamp`.
-
-### ERD (conceptual)
+### ERD (Entity Relationship Diagram)
 
 ```mermaid
 erDiagram
-  Organization ||--o{ User : has
-  Organization ||--o{ Task : has
+  Organization ||--o{ User : "has"
+  Organization ||--o{ Task : "has"
   User ||--o{ Task : "createdBy"
   Organization ||--o| Organization : "parent"
   AuditLog }o--|| User : "userId"
 ```
 
-- **2-level org hierarchy**: `Organization.parentId` points to parent; users and tasks are scoped to an organization. Task visibility includes the user’s org and (for simplicity) parent/child orgs in the same hierarchy.
+- **Organizations** support a 2-level hierarchy via `parentId`. Users and tasks are scoped to an organization.
+- **Task visibility** includes the user's org and (for hierarchy) parent/child orgs in the same tree.
 
 ---
 
-## Access Control and JWT
+## Access Control Implementation
 
-### Roles and permissions
+### Roles, permissions, and organization hierarchy
 
-- **Owner**: full task CRUD + audit log read.
-- **Admin**: same as Owner (task CRUD + audit log read).
-- **Viewer**: task read only.
+**Roles and permissions** (defined in `libs/data`):
 
-Permissions are defined in `libs/data` (`Permission` enum, `ROLE_PERMISSIONS`). The API uses `libs/auth`: `hasPermission(role, permission)` and the `@RequirePermission(Permission.X)` decorator.
+| Role   | Permissions |
+|--------|-------------|
+| **Owner** | TaskCreate, TaskRead, TaskUpdate, TaskDelete, AuditLogRead |
+| **Admin** | TaskCreate, TaskRead, TaskUpdate, TaskDelete, AuditLogRead |
+| **Viewer** | TaskRead |
 
-### Enforcement
+**Organization hierarchy:**
 
-- **JWT**: Issued at `POST /auth/login`. All other routes are protected by a global `JwtAuthGuard`; only `POST /auth/login` is marked `@Public()`.
-- **Permissions**: Controllers use `@RequirePermission(...)`. A `PermissionsGuard` reads the decorator and checks the authenticated user’s role against required permissions via `hasPermission(...)`.
-- **Task scope**: Tasks are filtered by the user’s organization (and hierarchy). Only tasks in the user’s org (or related parent/child orgs) are returned or updatable.
+- Users belong to one organization (`organizationId`).
+- Organizations can have a `parentId` for a 2-level hierarchy.
+- Task access is scoped by organization: users see tasks from their org and related parent/child orgs.
 
-### Flow
+**How it works:**
 
-1. Client sends credentials to `POST /auth/login`.
-2. API validates and returns `{ access_token, user }`.
-3. Client stores the token and sends `Authorization: Bearer <token>` on every request.
-4. `JwtAuthGuard` validates the token and attaches the user to the request.
-5. `PermissionsGuard` ensures the user’s role has the permissions required by the route’s `@RequirePermission(...)`.
+- `ROLE_PERMISSIONS` maps each role to a list of `Permission` values.
+- `libs/auth` provides `hasPermission(role, permission)`.
+- Controllers use `@RequirePermission(Permission.X)` on each route; `PermissionsGuard` checks the authenticated user's role against the required permission.
+
+### How JWT auth integrates with access control
+
+1. **Login**: Client sends credentials to `POST /auth/login`. API returns `{ access_token, user }`.
+2. **Protected routes**: All other routes use `JwtAuthGuard` (global) and `PermissionsGuard`. Only `POST /auth/login` is marked `@Public()`.
+3. **Request flow**:
+   - Client sends `Authorization: Bearer <token>` on every request.
+   - `JwtAuthGuard` validates the JWT and attaches the user to the request.
+   - `PermissionsGuard` ensures the user's role has the permissions required by the route's `@RequirePermission(...)`.
+4. **Task scope**: Services filter tasks by the user's `organizationId` and org hierarchy, so users only see and modify tasks in their scope.
 
 ---
 
-## API Documentation
+## API Docs
 
-Base URL: `http://localhost:3333` (or via proxy at `http://localhost:4200/api` with path rewritten to `/`).
+Base URL: `http://localhost:3333` (or via proxy at `http://localhost:4200/api`).
 
 All endpoints except login require: `Authorization: Bearer <access_token>`.
 
 ### Auth
 
-**POST /auth/login**
+#### POST /auth/login
 
-- Body: `{ "email": "string", "password": "string" }`
-- Response: `{ "access_token": "string", "user": { "id", "email", "role", "organizationId" } }`
-- Example:
-  ```bash
-  curl -X POST http://localhost:3333/auth/login -H "Content-Type: application/json" -d '{"email":"owner@acme.com","password":"password123"}'
-  ```
+**Request:**
+```bash
+curl -X POST http://localhost:3333/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"owner@acme.com","password":"password123"}'
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "uuid",
+    "email": "owner@acme.com",
+    "role": "owner",
+    "organizationId": "uuid"
+  }
+}
+```
 
 ### Tasks
 
-**POST /tasks** (TaskCreate)
+#### POST /tasks (create)
 
-- Body: `{ "title": "string", "description?", "status?", "category?" }`
-- Response: created task object.
+**Request:**
+```bash
+curl -X POST http://localhost:3333/tasks \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"New task","description":"Optional","status":"todo","category":"General"}'
+```
 
-**GET /tasks** (TaskRead)
+**Response:** Created task object (with `id`, `title`, `description`, `status`, `category`, `orderIndex`, `organizationId`, `createdById`, etc.).
 
-- Query: `category`, `status` (optional).
-- Response: array of tasks (scoped to user’s org/hierarchy).
+#### GET /tasks (list)
 
-**GET /tasks/:id** (TaskRead)
+**Request:**
+```bash
+curl "http://localhost:3333/tasks?category=General&status=todo" \
+  -H "Authorization: Bearer <token>"
+```
 
-- Response: single task or 404.
+**Response:** Array of tasks scoped to user's org/hierarchy.
 
-**PUT /tasks/:id** (TaskUpdate)
+#### GET /tasks/:id (get one)
 
-- Body: `{ "title?", "description?", "status?", "category?", "orderIndex?" }`
-- Response: updated task.
+**Request:**
+```bash
+curl http://localhost:3333/tasks/<id> -H "Authorization: Bearer <token>"
+```
 
-**DELETE /tasks/:id** (TaskDelete)
+**Response:** Single task object or 404.
 
-- Response: `{ "deleted": true }`.
+#### PUT /tasks/:id (update)
 
-**POST /tasks/reorder** (TaskUpdate)
+**Request:**
+```bash
+curl -X PUT http://localhost:3333/tasks/<id> \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Updated title","status":"in_progress","orderIndex":1}'
+```
 
-- Body: `{ "ids": ["uuid", ...] }`
-- Response: array of tasks in new order.
+**Response:** Updated task object.
+
+#### DELETE /tasks/:id (delete)
+
+**Request:**
+```bash
+curl -X DELETE http://localhost:3333/tasks/<id> -H "Authorization: Bearer <token>"
+```
+
+**Response:**
+```json
+{ "deleted": true }
+```
+
+#### POST /tasks/reorder (reorder)
+
+**Request:**
+```bash
+curl -X POST http://localhost:3333/tasks/reorder \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"ids":["uuid1","uuid2","uuid3"]}'
+```
+
+**Response:** Array of tasks in the new order.
 
 ### Audit log (Owner/Admin only)
 
-**GET /audit-log** (AuditLogRead)
+#### GET /audit-log
 
-- Query: `limit` (optional, default 100).
-- Response: array of audit log entries.
+**Request:**
+```bash
+curl "http://localhost:3333/audit-log?limit=100" -H "Authorization: Bearer <token>"
+```
+
+**Response:** Array of audit log entries (`id`, `action`, `resource`, `resourceId`, `userId`, `userEmail`, `details`, `timestamp`).
+
+---
+
+## Future Considerations
+
+- **Advanced role delegation**: Allow Admins to assign roles within their org or delegate subsets of permissions (e.g. temporary Viewer → Admin).
+- **Production-ready security**:
+  - **JWT refresh tokens**: Short-lived access token + refresh token; store refresh tokens server-side and rotate on use.
+  - **CSRF protection**: For cookie-based or form-heavy flows, add CSRF tokens and validate on state-changing requests.
+  - **RBAC caching**: Cache permission checks per role to reduce lookups and improve latency.
+- **Scaling permission checks efficiently**: Consider attribute-based or policy engines if rules become complex; use in-memory caches for `ROLE_PERMISSIONS` and org hierarchy.
+
+---
+
+## Evaluation Criteria
+
+This project is designed to meet the following evaluation criteria:
+
+| Criterion | Implementation |
+|-----------|----------------|
+| **Secure and correct RBAC implementation** | Role–permission mapping in `libs/data`, enforced via `@RequirePermission` and `PermissionsGuard` on every protected route |
+| **JWT-based authentication** | Passport JWT strategy, `JwtAuthGuard` on all routes except login |
+| **Clean, modular architecture in NX** | `apps/api`, `apps/dashboard`, `libs/data`, `libs/auth` with clear boundaries |
+| **Code clarity, structure, and maintainability** | Shared types, DTOs, guards, and decorators; consistent patterns |
+| **Responsive and intuitive UI** | Angular dashboard with TailwindCSS; responsive layout for mobile and desktop |
+| **Test coverage** | Jest tests for API, dashboard, `libs/data`, and `libs/auth` |
+| **Documentation quality** | README with setup, architecture, data model, access control, and API docs |
+| **Bonus for elegant UI/UX or advanced features** | Dark/light mode, drag-and-drop reordering, responsive design |
 
 ---
 
 ## Testing
 
-- **Backend**: Jest for API and libs.
+- **Backend**:
   ```bash
   npm run test:api
   npm run test:data
   npm run test:auth
   ```
-- **Frontend**: Jest for dashboard.
+- **Frontend**:
   ```bash
   npm run test:dashboard
   ```
 
 ---
 
-## Future Considerations
-
-- **Refresh tokens**: Short-lived access token + refresh token; store refresh tokens server-side and rotate on use.
-- **CSRF**: For cookie-based or form-heavy flows, add CSRF tokens and validate on state-changing requests.
-- **Production security**: Strong `JWT_SECRET`, HTTPS only, rate limiting, and security headers.
-- **RBAC scaling**: Cache permission checks per role; consider attribute-based or policy engines if rules become complex.
-- **Advanced delegation**: Allow Admins to assign roles within their org or delegate subsets of permissions.
-
----
-
 ## Bonus features implemented
 
-- **Dark/light mode** toggle on the dashboard (persisted via `document.documentElement.classList`).
-- **Drag-and-drop** reordering of tasks (Angular CDK).
-- **Responsive** layout for mobile and desktop (Tailwind).
-
-Task completion visualization (e.g. bar chart) and keyboard shortcuts can be added on top of the current dashboard and state.
+- **Dark/light mode** toggle on the dashboard (persisted via `document.documentElement.classList`)
+- **Drag-and-drop** reordering of tasks (Angular CDK)
+- **Responsive** layout for mobile and desktop (TailwindCSS)
