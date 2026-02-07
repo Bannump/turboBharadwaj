@@ -292,23 +292,6 @@ curl "http://localhost:3333/audit-log?limit=100" -H "Authorization: Bearer <toke
 
 ---
 
-## Evaluation Criteria
-
-This project is designed to meet the following evaluation criteria:
-
-| Criterion | Implementation |
-|-----------|----------------|
-| **Secure and correct RBAC implementation** | Role–permission mapping in `libs/data`, enforced via `@RequirePermission` and `PermissionsGuard` on every protected route |
-| **JWT-based authentication** | Passport JWT strategy, `JwtAuthGuard` on all routes except login |
-| **Clean, modular architecture in NX** | `apps/api`, `apps/dashboard`, `libs/data`, `libs/auth` with clear boundaries |
-| **Code clarity, structure, and maintainability** | Shared types, DTOs, guards, and decorators; consistent patterns |
-| **Responsive and intuitive UI** | Angular dashboard with TailwindCSS; responsive layout for mobile and desktop |
-| **Test coverage** | Jest tests for API, dashboard, `libs/data`, and `libs/auth` |
-| **Documentation quality** | README with setup, architecture, data model, access control, and API docs |
-| **Bonus for elegant UI/UX or advanced features** | Dark/light mode, drag-and-drop reordering, responsive design |
-
----
-
 ## Testing
 
 - **Backend**:
