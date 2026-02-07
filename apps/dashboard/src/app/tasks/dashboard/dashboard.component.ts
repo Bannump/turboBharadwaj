@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, effect } from '@angular/core';
+import { Component, inject, signal, computed, effect, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -7,6 +7,7 @@ import { TaskService, Task, TaskStatus } from '../task.service';
 
 const STATUSES: TaskStatus[] = ['todo', 'in_progress', 'done'];
 const CATEGORIES = ['General', 'Work', 'Personal'];
+const DARK_MODE_STORAGE_KEY = 'task-dashboard-dark-mode';
 
 @Component({
   standalone: true,
@@ -23,7 +24,7 @@ export class DashboardComponent {
   filterCategory = signal<string>('');
   filterStatus = signal<string>('');
   sortBy = signal<'order' | 'title' | 'status'>('order');
-  darkMode = signal(!!(typeof document !== 'undefined' && document.documentElement.classList.contains('dark')));
+  darkMode = signal(this.getInitialDarkMode());
   showForm = signal(false);
   editingId = signal<string | null>(null);
   formTitle = signal('');
@@ -47,14 +48,54 @@ export class DashboardComponent {
     return list;
   });
 
+  /** Task completion stats for bar chart: counts per status and percentages. */
+  completionStats = computed(() => {
+    const list = this.tasks();
+    const total = list.length;
+    const todo = list.filter((t) => t.status === 'todo').length;
+    const inProgress = list.filter((t) => t.status === 'in_progress').length;
+    const done = list.filter((t) => t.status === 'done').length;
+    return {
+      total,
+      todo,
+      inProgress,
+      done,
+      todoPct: total ? (todo / total) * 100 : 0,
+      inProgressPct: total ? (inProgress / total) * 100 : 0,
+      donePct: total ? (done / total) * 100 : 0,
+    };
+  });
+
+  private getInitialDarkMode(): boolean {
+    if (typeof localStorage === 'undefined') return !!(typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+    const stored = localStorage.getItem(DARK_MODE_STORAGE_KEY);
+    if (stored !== null) return stored === 'true';
+    return !!(typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  }
+
   constructor() {
     effect(() => {
-      this.darkMode();
-      if (typeof document !== 'undefined') {
-        document.documentElement.classList.toggle('dark', this.darkMode());
-      }
+      const dark = this.darkMode();
+      if (typeof document !== 'undefined') document.documentElement.classList.toggle('dark', dark);
+      if (typeof localStorage !== 'undefined') localStorage.setItem(DARK_MODE_STORAGE_KEY, String(dark));
     });
     this.loadTasks();
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement;
+    const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable;
+    if (event.key === 'Escape') {
+      if (this.showForm()) this.closeForm();
+      return;
+    }
+    if (inInput) return;
+    const isNewTaskShortcut = (event.ctrlKey || event.metaKey) && event.altKey && (event.key === 'N' || event.key === 'n');
+    if (isNewTaskShortcut) {
+      event.preventDefault();
+      this.openCreate();
+    }
   }
 
   loadTasks(): void {
